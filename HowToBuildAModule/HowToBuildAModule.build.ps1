@@ -53,19 +53,45 @@ function Assert-Folder {
 }
 
 task Init {
-    $Script:ModuleName = (Test-ModuleManifest -Path ".\Source\*.psd1").Name
+    $Script:ModuleName = Split-Path -Path $PSScriptRoot -Leaf
     Write-Verbose -Message "Initializing Modules"
     $Modules = @("PSScriptAnalyzer","Pester","platyPS","PowerShellGet")
     Assert-Module -Name $Modules
 
     Write-Verbose -Message "Initializing folder structure"
-    $Folders = @("Docs","Output","Output\Temp","Source","Source\Private","Source\Public","Tests")
+    $Folders = @("Docs","Output","Output\Temp","Source","Source\Private","Source\Public","Tests",".vscode")
     Assert-Folder -Name $Folders
+
+    Write-Verbose -Message "Initializing Custom Files"
 
     Write-Verbose -Message "Initializing Module Manifest"
     if(-not (Test-Path ".\Source\$($ModuleName).psd1")){
         Write-Verbose -Message "Creating the Module Manifest"
         New-ModuleManifest -Path ".\Source\$($ModuleName).psd1" -ModuleVersion "0.0.1"
+    }
+
+    Write-Verbose -Message "Initializing .vscode\settings.json"
+    if(-not (Test-Path ".\.vscode\settings.json")){
+        Write-Verbose -Message "Creating .vscode\settings.json"
+        $SettingsJson = '       {
+            // TABS not spaces!
+            "editor.tabSize": 4,
+            "editor.insertSpaces": false,
+            // PowerShell formatting
+            "powershell.codeFormatting.preset": "OTBS",
+            // When enabled, will trim trailing whitespace when you save a file.
+            "files.trimTrailingWhitespace": true
+        }'
+        $SettingsJson | Set-Content -Path .vscode\settings.json
+    }
+
+    Write-Verbose -Message "Initializing .gitignore"
+    if(-not (Test-Path ".gitignore")){
+        Write-Verbose -Message "Creating .gitignore"
+        $gitignore = '      Output/*
+        coverage.xml
+        testResults.xml'
+        $gitignore | Set-Content -Path .gitignore
     }
 }
 
@@ -80,18 +106,22 @@ task Test {
         throw "Couldn't run Script Analyzer"
     }
 
-    Write-Verbose -Message "Running Pester Tests"
-    $files = @(Get-ChildItem .\Source -File -Recurse -Include *.ps1)
-    $pesterConfiguration=New-PesterConfiguration
-    $pesterConfiguration.Run.Path=".\Tests\*.ps1"
-    $pesterConfiguration.TestResult.Enabled=$true
-    $pesterConfiguration.TestResult.OutputFormat="NUnitXml"
-    $pesterConfiguration.CodeCoverage.Enabled=$true
-    $pesterConfiguration.CodeCoverage.CoveragePercentTarget=$CodeCoveragePercentTarget
-    $pesterConfiguration.CodeCoverage.Path=$files 
-    $Results = Invoke-Pester -Configuration:$pesterConfiguration
-    if($Results.FailedCount -gt 0){
-        throw "$($Results.FailedCount) Tests failed"
+    if((Get-ChildItem .\Tests -Recurse).Count -gt 0){
+        Write-Verbose -Message "Running Pester Tests"
+        $files = @(Get-ChildItem .\Source -File -Recurse -Include *.ps1)
+        $pesterConfiguration=New-PesterConfiguration
+        $pesterConfiguration.Run.Path=".\Tests\*.ps1"
+        $pesterConfiguration.TestResult.Enabled=$true
+        $pesterConfiguration.TestResult.OutputFormat="NUnitXml"
+        $pesterConfiguration.CodeCoverage.Enabled=$true
+        $pesterConfiguration.CodeCoverage.CoveragePercentTarget=$CodeCoveragePercentTarget
+        $pesterConfiguration.CodeCoverage.Path=$files 
+        $Results = Invoke-Pester -Configuration:$pesterConfiguration
+        if($Results.FailedCount -gt 0){
+            throw "$($Results.FailedCount) Tests failed"
+        }
+    } else {
+        Write-Warning "No tests to run"
     }
 }
 
@@ -238,20 +268,20 @@ task Build {
 
     if(!(Get-ChildItem -Path ".\Docs")){
         Write-Verbose -Message "Docs folder is empty, generating new files"
-        if(Get-Module -Name $($ModuleName)) {
+        if((Get-Module -Name $($ModuleName)).ExportedCommands.Count -gt 0) {
             Write-Verbose -Message "Module: $($ModuleName) is imported into session, generating Help Files"
             New-MarkdownHelp -Module $ModuleName -OutputFolder ".\Docs"
             New-MarkdownAboutHelp -OutputFolder ".\Docs" -AboutName $ModuleName
             New-ExternalHelp ".\Docs" -OutputPath "$($OutputFolder)\$($ModuleName)\$($ModuleVersion)\en-US\"
         }
         else {
-            throw "Module is not imported, cannot generate help files"
+            Write-Warning "Module is not imported, cannot generate help files"
         }
     }
     else {
         Write-Verbose -Message "Removing old Help files, to generate new files."
         Remove-Item -Path ".\Docs\*.*" -Exclude "about_*"
-        if(Get-Module -Name $($ModuleName)) {
+        if((Get-Module -Name $($ModuleName)).ExportedCommands.Count -gt 0) {
             Write-Verbose -Message "Module: $($ModuleName) is imported into session, generating Help Files"
             New-MarkdownHelp -Module $ModuleName -OutputFolder ".\Docs"
             New-ExternalHelp ".\Docs" -OutputPath "$($OutputFolder)\$($ModuleName)\$($ModuleVersion)\en-US\"
