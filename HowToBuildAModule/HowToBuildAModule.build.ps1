@@ -59,7 +59,7 @@ task Init {
     Assert-Module -Name $Modules
 
     Write-Verbose -Message "Initializing folder structure"
-    $Folders = @("Docs","Output","Output\Temp","Source","Source\Private","Source\Public","Tests",".vscode")
+    $Folders = @("Docs","Output","Output\Temp","Source","Source\Private","Source\Public","Tests")
     Assert-Folder -Name $Folders
 
     Write-Verbose -Message "Initializing Custom Files"
@@ -68,21 +68,6 @@ task Init {
     if(-not (Test-Path ".\Source\$($ModuleName).psd1")){
         Write-Verbose -Message "Creating the Module Manifest"
         New-ModuleManifest -Path ".\Source\$($ModuleName).psd1" -ModuleVersion "0.0.1"
-    }
-
-    Write-Verbose -Message "Initializing .vscode\settings.json"
-    if(-not (Test-Path ".\.vscode\settings.json")){
-        Write-Verbose -Message "Creating .vscode\settings.json"
-        $SettingsJson = '       {
-            // TABS not spaces!
-            "editor.tabSize": 4,
-            "editor.insertSpaces": false,
-            // PowerShell formatting
-            "powershell.codeFormatting.preset": "OTBS",
-            // When enabled, will trim trailing whitespace when you save a file.
-            "files.trimTrailingWhitespace": true
-        }'
-        $SettingsJson | Set-Content -Path .vscode\settings.json
     }
 
     Write-Verbose -Message "Initializing .gitignore"
